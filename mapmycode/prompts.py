@@ -1,53 +1,67 @@
 def get_file_summary(file_name, file_content, dependencies_dict):
-
     summary_prompt = f"""
-        You are analyzing a Python codebase.
+    You are analyzing a Python codebase for two downstream tasks:
+    1. generating project documentation
+    2. generating an architecture diagram
 
-        I will provide:
-        * The file name: {file_name}
-        * The full content: {file_content}
-        * Dependencies: {dependencies_dict}
+    You will be given:
+    - file name: {file_name}
+    - file content: {file_content}
+    - dependencies: {dependencies_dict}
 
-        Your task:
-        1. Analyze the file and summarize every function defined in it.
-        2. Explain how this file uses its dependencies to perform its overall task.
+    Your goal is to extract ONLY the minimum high-value information needed for documentation and architecture understanding.
 
-        Instructions:
-        1. Identify all functions defined in the file.
-        2. For each function, produce a concise summary covering:
-           - purpose
-           - inputs
-           - returns
-           - key logic
-        3. Add a top-level key called "dependencies" that explains how the current file leverages its dependencies in order to execute its responsibilities.
-        4. Use dependency summaries to clarify roles, but do not repeat them verbatim.
-        5. If no functions exist, return an empty list for "functions".
-        6. If there are no meaningful dependencies, return an empty list for "dependencies".
+    Instructions:
+    1. Identify the PRIMARY responsibility of this file in 1-2 sentences.
+    2. Identify only the MOST IMPORTANT symbols defined in this file:
+      - top-level functions that are central to the file's purpose
+      - classes
+      - entry-point functions
+      - orchestration functions
+      - public API functions
+    3. DO NOT include trivial/private/helper functions unless they are essential to understanding the architecture.
+    4. For each important symbol, return only:
+      - name
+      - type ("function" or "class")
+      - short role in the file
+    5. Summarize only MEANINGFUL dependencies that help explain architecture.
+      - Ignore standard library imports unless they are central to the file’s responsibility.
+      - Ignore dependencies that are imported but not materially important.
+    6. Add a short "flow_role" describing how this file participates in the overall project flow.
+      Examples:
+      - "entry point"
+      - "data loading"
+      - "preprocessing"
+      - "model training"
+      - "inference"
+      - "utility support"
+      - "visualization"
+      - "API layer"
+      - "database access"
+    7. Keep the output highly compressed.
+    8. Output VALID JSON ONLY.
 
-        Output requirements:
-        * Output must be VALID JSON ONLY.
-        * Do not include explanations outside the JSON.
-        * Follow this exact schema:
+    Return JSON in exactly this schema:
 
+    {{
+      "file_name": "{file_name}",
+      "file_purpose": "<1-2 sentence summary>",
+      "flow_role": "<short architectural role>",
+      "dependencies": [
         {{
-          "file_name": "{file_name}",
-          "dependencies": [
-            {{
-              "dependency_name": "<string>",
-              "role": "<how this dependency is used by the current file>"
-            }}
-          ],
-          "functions": [
-            {{
-              "function_name": "<string>",
-              "purpose": "<string>",
-              "inputs": ["<param1>", "<param2>"],
-              "returns": "<description>",
-              "key_logic": "<brief explanation>"
-            }}
-          ]
+          "dependency_name": "<string>",
+          "role": "<short description of why this dependency matters>"
         }}
-        """
+      ],
+      "important_symbols": [
+        {{
+          "name": "<string>",
+          "type": "function|class",
+          "role": "<short description>"
+        }}
+      ]
+    }}
+    """
     return summary_prompt
   
 def get_documentation_prompt(files_metadata):
@@ -128,130 +142,320 @@ def get_documentation_prompt(files_metadata):
     return prompt
   
 
+def get_incremental_documentation_prompt(existing_documentation,
+new_files_metadata):    
+  prompt = f"""
+You are an expert software architect, code analyst, and technical documentation writer.
 
-def get_mermaid_flowchart_prompt(files_metadata, dependency_graph):
-    """
-    Generates a prompt for a Mermaid FLOWCHART (flowchart TD).
-    The diagram shows:
-    - each file as a node
-    - dependency relationships as arrows
-    - each file's purpose, main functions, and how it uses its dependencies
-    """
-    
-    prompt = f"""
-    You are a Software Visualization Expert.
+Your task is to maintain a concise living documentation file for a Python codebase.
 
-    ### TASK:
-    Convert the following Python project metadata and dependency graph into a **Mermaid.js Flowchart** that clearly explains:
-    1. what each file does
-    2. how files depend on each other
-    3. how each file leverages its dependencies to complete its responsibilities
+The codebase metadata is provided in batches because the entire repository cannot be analyzed in a single request.
 
-    ### DATA:
-    - **File Metadata:** {files_metadata}
-    - **Dependency Graph:** {dependency_graph}
+You will receive:
 
-    ### DIAGRAM GOAL:
-    Produce a clean, readable architecture flowchart for a Python codebase.
-    The chart should help a reader quickly understand:
-    - the role of each file
-    - the major functions it contains
-    - how it uses imported/internal dependency files
-    - the overall structure of the project
+1. Existing documentation generated so far
+2. A new batch of file metadata
 
-    ### RULES:
-    1. **Header**
-       - Start the Mermaid code exactly with:
-         `flowchart TD`
+Your job is to update the documentation using the newly discovered information.
 
-    2. **Nodes**
-       - Represent every file as one node.
-       - Each node must include meaningful, compact information.
-       - Use this structure inside each node label:
-         - filename
-         - purpose/objective
-         - main functions
-         - dependency usage summary
+--------------------------------------------------
+CRITICAL LENGTH REQUIREMENT
+--------------------------------------------------
 
-       - Preferred format:
-         `NodeID["<b>filename.py</b><br/>Purpose: ...<br/>Functions: ...<br/>Uses deps for: ..."]`
+The entire documentation MUST remain between 300 and 500 words.
 
-       - Keep text concise and readable.
-       - Do not overload nodes with excessive detail.
-       - If a file has no functions, write:
-         `Functions: None`
-       - If a file has no meaningful dependency usage, write:
-         `Uses deps for: None`
+This limit applies every time you generate output.
 
-    3. **Edges / Dependencies**
-       - Show dependencies using directional arrows:
-         `A --> B`
-       - Arrows must represent that file A depends on file B.
-       - Dependencies must be shown primarily through connecting lines, not only through node text.
-       - If helpful, add short edge labels for important relationships, such as:
-         `A -->|imports helpers| B`
-         But only when it improves clarity.
+Do not allow the document to grow indefinitely.
 
-    4. **Subgraphs**
-       - Group files by directory, package, or module when applicable.
-       - Use subgraphs to improve readability for medium or large projects.
-       - Keep grouping logical and not overly fragmented.
+When new information is introduced:
 
-    5. **Node Content Prioritization**
-       - Use the metadata to infer the file's main responsibility.
-       - Summarize how the file leverages dependencies in a practical way, such as:
-         - orchestrates helper modules
-         - calls utility functions for parsing
-         - uses config/constants from another module
-         - delegates rendering or I/O to another file
-         - builds on shared models or services
-       - Do not simply restate raw imports.
-       - Explain dependency usage in terms of purpose.
+- Compress older descriptions if necessary.
+- Merge related information into shorter summaries.
+- Retain only the most important architectural insights.
+- Prioritize major files and core modules.
+- Summarize utility/helper files briefly.
+- Remove redundant explanations.
+- Rewrite sections to stay within the word budget.
 
-    6. **Color Scheme**
-       - Use a soft, modern, easy-to-read color palette.
-       - Apply styles consistently using Mermaid `style` statements.
+Think of this as maintaining an executive technical summary rather than detailed documentation.
 
-       Use these defaults:
-       - **Entry-point / orchestrator files**:
-         `fill:#FFF4E5,stroke:#FB8C00,stroke-width:2px,color:#1F1F1F`
-       - **Regular processing / service files**:
-         `fill:#E8F0FE,stroke:#1A73E8,stroke-width:1.5px,color:#1F1F1F`
-       - **Leaf utility / helper files (no internal dependencies)**:
-         `fill:#E8F5E9,stroke:#43A047,stroke-width:1.5px,color:#1F1F1F`
-       - **Config / constants / schema files**:
-         `fill:#F3E8FD,stroke:#8E24AA,stroke-width:1.5px,color:#1F1F1F`
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
 
-       If a file clearly fits one of these categories, style it accordingly.
+- Treat the existing documentation as the current source of truth.
+- Incorporate new findings into the documentation.
+- Avoid duplicate information.
+- Preserve the overall structure.
+- Update previous conclusions if new evidence provides a better understanding.
+- If information conflicts, prefer the newer metadata.
+- Do not invent unsupported details.
+- Explicitly mark uncertain conclusions as inferences.
+- Focus on architecture, responsibilities, and interactions rather than implementation details.
 
-    7. **Readability**
-       - Prefer short function lists like:
-         `Functions: load_data(), clean_text(), run()`
-       - If there are too many functions, include only the most important ones and summarize the rest:
-         `Functions: parse(), validate(), render(), ...`
-       - Keep node labels balanced so the chart remains readable.
+--------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------
 
-    8. **Output Constraint**
-       - Return **ONLY** the Mermaid code block.
-       - Do not include any explanation, markdown prose, or commentary outside the code block.
+Return the COMPLETE updated documentation.
 
-    ### EXAMPLE OUTPUT:
-    ```mermaid
-    flowchart TD
-      subgraph app
-        A["<b>main.py</b><br/>Purpose: Entry point for the documentation pipeline<br/>Functions: main(), run_pipeline()<br/>Uses deps for: orchestrating scanning, analysis, and diagram generation"]
-        B["<b>scanner.py</b><br/>Purpose: Discover Python files in the project<br/>Functions: walk_directories()<br/>Uses deps for: using os/path utilities to traverse directories"]
-        C["<b>summarizer.py</b><br/>Purpose: Generate file/function summaries<br/>Functions: get_file_summary()<br/>Uses deps for: consuming dependency context to produce richer summaries"]
-      end
+Do NOT return only the delta.
 
-      A -->|calls scan step| B
-      A -->|calls summary step| C
+Generate a fully rewritten and updated version that incorporates all known information while remaining between 300 and 500 words.
 
-      style A fill:#FFF4E5,stroke:#FB8C00,stroke-width:2px,color:#1F1F1F
-      style B fill:#E8F5E9,stroke:#43A047,stroke-width:1.5px,color:#1F1F1F
-      style C fill:#E8F0FE,stroke:#1A73E8,stroke-width:1.5px,color:#1F1F1F
-    ```
+--------------------------------------------------
+DOCUMENT STRUCTURE
+--------------------------------------------------
 
-    Generate the flowchart for the provided data now.
-    """
-    return prompt
+# Overall Codebase Objective
+
+A concise summary of:
+- project purpose
+- problem being solved
+- key capabilities
+
+# Logical Flow
+
+A concise description of:
+- entry points
+- execution flow
+- major module interactions
+
+# Key Files
+
+For each important file:
+
+## <filename>
+
+Purpose:
+Role:
+Notes:
+
+Use only 1-3 short sentences per file.
+
+If there are many files, group minor files together under a shared section such as:
+
+## Supporting Utilities
+
+Summarize their collective purpose briefly.
+
+# Dependencies
+
+Summarize only the most important dependency relationships and architectural connections.
+
+--------------------------------------------------
+EXISTING DOCUMENTATION
+--------------------------------------------------
+
+{existing_documentation}
+
+--------------------------------------------------
+NEW FILE METADATA
+--------------------------------------------------
+
+{new_files_metadata}
+
+--------------------------------------------------
+TASK
+--------------------------------------------------
+
+Produce the complete updated documentation while strictly maintaining a total length between 300 and 500 words.
+"""
+  return prompt
+
+def get_mermaid_flowchart_prompt(
+  documentation,
+  dependency_graph):
+  prompt = f"""
+You are a Software Architecture Visualization Expert.
+
+### TASK
+
+Convert the provided codebase documentation and dependency graph into a Mermaid.js Flowchart that visualizes:
+
+1. The role of each file/module
+2. The overall architecture
+3. How files interact
+4. Dependency relationships between files
+5. The end-to-end flow of the system
+
+The documentation is the primary source of truth for understanding responsibilities and architecture.
+
+The dependency graph is the source of truth for dependency relationships.
+
+--------------------------------------------------
+INPUTS
+--------------------------------------------------
+
+### CODEBASE DOCUMENTATION
+
+{documentation}
+
+### DEPENDENCY GRAPH
+
+{dependency_graph}
+
+--------------------------------------------------
+HOW TO USE THE INPUTS
+--------------------------------------------------
+
+Use the documentation to determine:
+
+- file purpose
+- module responsibilities
+- architectural role
+- logical flow
+- major functionality
+- how files use their dependencies
+
+Use the dependency graph to determine:
+
+- file-to-file connections
+- dependency directions
+- relationship structure
+
+Do not simply repeat dependency names.
+
+Instead explain relationships in terms of architecture and responsibility.
+
+Example:
+
+Bad:
+"Uses parser.py"
+
+Good:
+"Uses parsing utilities to extract and normalize source code information"
+
+--------------------------------------------------
+DIAGRAM GOAL
+--------------------------------------------------
+
+The resulting flowchart should help a new engineer quickly understand:
+
+- What each file does
+- How files collaborate
+- Which files orchestrate workflows
+- Which files provide reusable services/utilities
+- The overall structure of the codebase
+
+--------------------------------------------------
+NODE FORMAT
+--------------------------------------------------
+
+Represent every file as a node.
+
+Preferred format:
+
+NodeID["<b>filename.py</b><br/>
+Role: ...<br/>
+Purpose: ...<br/>
+Uses deps for: ..."]
+
+Keep descriptions concise.
+
+Maximum:
+- 1 short role statement
+- 1 short purpose statement
+- 1 short dependency usage statement
+
+Avoid long paragraphs.
+
+--------------------------------------------------
+EDGE RULES
+--------------------------------------------------
+
+Show all dependency relationships using arrows.
+
+Example:
+
+A --> B
+
+Arrow direction means:
+
+A depends on B
+
+Add edge labels only when they improve clarity.
+
+Example:
+
+A -->|orchestrates| B
+
+A -->|loads config| C
+
+A -->|uses utilities| D
+
+--------------------------------------------------
+SUBGRAPH RULES
+--------------------------------------------------
+
+If modules appear to belong to common packages or directories:
+
+Group them using Mermaid subgraphs.
+
+Examples:
+
+subgraph ingestion
+subgraph processing
+subgraph visualization
+subgraph utilities
+
+Only create groups when they improve readability.
+
+--------------------------------------------------
+ARCHITECTURE EMPHASIS
+--------------------------------------------------
+
+Use documentation to identify:
+
+- Entry points
+- Controllers/orchestrators
+- Services
+- Utilities
+- Configuration modules
+- Data models
+- Shared components
+
+Reflect these distinctions through layout and styling.
+
+--------------------------------------------------
+COLOR SCHEME
+--------------------------------------------------
+
+Entry Points / Orchestrators:
+fill:#FFF4E5,stroke:#FB8C00,stroke-width:2px,color:#1F1F1F
+
+Core Processing / Services:
+fill:#E8F0FE,stroke:#1A73E8,stroke-width:1.5px,color:#1F1F1F
+
+Utilities / Helpers:
+fill:#E8F5E9,stroke:#43A047,stroke-width:1.5px,color:#1F1F1F
+
+Config / Constants / Schemas:
+fill:#F3E8FD,stroke:#8E24AA,stroke-width:1.5px,color:#1F1F1F
+
+Apply styles consistently.
+
+--------------------------------------------------
+READABILITY RULES
+--------------------------------------------------
+
+- Keep node text compact.
+- Prefer architectural summaries over implementation details.
+- Avoid large blocks of text.
+- Optimize for diagram readability.
+- If documentation mentions many functions, include only the most important ones.
+- Focus on responsibilities rather than exhaustive details.
+
+--------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------
+
+Return ONLY a valid Mermaid code block.
+
+Start exactly with:
+
+```mermaid
+flowchart TD
+"""
+  return prompt

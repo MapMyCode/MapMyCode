@@ -27,10 +27,11 @@ Once your api key has been successfully set, navigate to your code directory and
 ```
 mapmycode .
 ```
-This runs the package on your codebase and creates three files inside a folder called **"mapmycode_output"**. The three files are
+This runs the package on your codebase and creates four files inside a folder called **"mapmycode_output"**. The four files are
 
 1. Code documentation
 2. Codebase architecture diagram
 3. Json comprising of the descriptions of each file.
+4. The mermaid syntax (this can be used by the user to make any edits if required)
 
 **Note : The package currently only deals with python files. We plan to add support for other languages soon.**

@@ -33,12 +33,12 @@ def main(path,output_dir):
     
     print('Creating documentation...')
     print('-'*60)
-    create_documentation(file_wise_summary,output_dir)
+    documentation_str = create_documentation(file_wise_summary,output_dir)
     
     print('Creating architecture diagram...')
     print('-'*60)
-    create_mermaid_diagram(graph,file_wise_summary,output_dir)
+    create_mermaid_diagram(graph,documentation_str,output_dir)
 
 if __name__ == "__main__":
-    path = "../"
+    path = "assignment1/"
     main(path,path)

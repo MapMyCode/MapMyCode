@@ -1,6 +1,10 @@
 from mapmycode.groq_call import run_groq_api
 from mapmycode.prompts import get_file_summary
+from langchain_core.output_parsers import JsonOutputParser
 import os
+from mapmycode.pydantic_classes import FileSummary
+import json
+import time
 
 def topological_sort(graph):
     visited = set()
@@ -48,6 +52,7 @@ def create_graph(python_files):
 
 def create_dependency_dict(graph,order,file_contents):
     results = {}
+    parser = JsonOutputParser(pydantic_object=FileSummary)
     for file in order:
         file_content = file_contents[file]
         
@@ -55,10 +60,12 @@ def create_dependency_dict(graph,order,file_contents):
         dependencies_dict = {}
         
         for dependency in dependencies:
-            dependencies_dict[dependency] = results[dependency]
+            dependencies_dict[dependency] = results[dependency]['important_symbols']
         
         summary_prompt = get_file_summary(file,file_content, dependencies_dict)
         result = run_groq_api(summary_prompt)
-        results[file] = result
+        result_parsed = parser.parse(result)
+        results[file] = result_parsed
+        time.sleep(2)
     
     return results

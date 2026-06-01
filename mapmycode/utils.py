@@ -1,11 +1,12 @@
 import os
 import base64
 import io, requests
-from IPython.display import Image, display
 from PIL import Image as im
 import matplotlib.pyplot as plt
 from mapmycode.groq_call import run_groq_api
-from mapmycode.prompts import get_mermaid_flowchart_prompt, get_documentation_prompt
+from mapmycode.prompts import get_mermaid_flowchart_prompt, get_documentation_prompt,get_incremental_documentation_prompt
+import tiktoken
+import time
 
 exclude_dirs = ['.venv','__pycache__','venv','mapmycode','.test-env','dist']
 
@@ -22,12 +23,43 @@ def walk_directories(path):
     return python_files
 
 def create_documentation(files_metadata,path):
-    prompt = get_documentation_prompt(files_metadata)
-    response = run_groq_api(prompt)
     
+    encoding = tiktoken.get_encoding("o200k_base")
+    max_limit = 6000
+    
+    file_names = files_metadata.keys()
+    start = 0
+    existing_documentation = ""
+    while start < len(file_names):
+        context = files_metadata[file_names[start]]
+        tokens = len(encoding.encode(context))
+        if tokens > max_limit:
+            prompt = get_incremental_documentation_prompt(context,existing_documentation)
+            existing_documentation = run_groq_api(prompt)
+            start += 1
+            time.sleep(2)
+        else:
+            for k in range(start, len(file_names)):
+                new_context = files_metadata[file_names[k]]
+                new_tokens = len(encoding.encode(new_context))
+                
+                total_tokens = len(encoding.encode(context)) + new_tokens
+                
+                if total_tokens > max_limit:
+                    start = k
+                    break
+                
+                context += new_context
+            
+            prompt = get_incremental_documentation_prompt(context,existing_documentation)
+            existing_documentation = run_groq_api(prompt)
+            time.sleep(2)
+            
     path = os.path.join(path,"documentation.md")
     with open(path,'w') as f:
-        f.write(response)
+        f.write(existing_documentation)
+    
+    return existing_documentation
     
 
 def mm(graph, base_dir):
@@ -41,9 +73,12 @@ def mm(graph, base_dir):
     plt.savefig(image_path, dpi=1200)
     
     
-def create_mermaid_diagram(graph,file_wise_summary,path):
-    mermaid_prompt = get_mermaid_flowchart_prompt(file_wise_summary,graph)
+def create_mermaid_diagram(graph,documentation,path):
+    mermaid_prompt = get_mermaid_flowchart_prompt(documentation,graph)
     response = run_groq_api(mermaid_prompt)
     response = response.replace("```mermaid", "").replace("```", "").strip()
+    mermaid_syntax_path = os.path.join(path,'mermaid_syntax.txt')
+    with open(mermaid_syntax_path,'w') as f:
+        f.write(response)
     mm(response,path)
-
+    

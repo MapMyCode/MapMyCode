@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mapmycode"
-version = "1.0.0"
+version = "1.0.1"
 description = "Analyzes python codebases and generates documentation with dependency graphs"
 authors = [
     { name = "Saurav Pattnaik" },
@@ -14,13 +14,19 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 dependencies = [
-    "python-dotenv>=1.0.0",
-    "groq>=1.1.1",
+    "python-dotenv==1.2.2",
+    "groq==1.1.2",
     "ipython>=9.11.0",
-    "matplotlib>=3.10.8",
-    "pillow>=12.1.1",
-    "requests>=2.32.5",
+    "matplotlib==3.10.8",
+    "pillow==12.2.0",
+    "requests==2.33.1",
     "build>=1.4.0",
+    "twine>=6.2.0",
+    "langchain-core==1.2.28",
+    "pipreqs>=0.4.13",
+    "pydantic==2.12.5",
+    "networkx>=3.6.1",
+    "tiktoken>=0.13.0",
 ]
 
 [project.scripts]
