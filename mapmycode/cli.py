@@ -22,8 +22,9 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="""
     Example usage:
-    mapmycode .                  # Analyze current directory
-    mapmycode . sample_output    # Analyze current directory and save in custom folder
+    mapmycode .                          # Analyze current directory
+    mapmycode . sample_output            # Analyze current directory and save in custom folder
+    mapmycode . --exclude test examples  # Analyze current directory, skipping "test" and "examples" folders
         """
     )
     parser.add_argument(
@@ -37,6 +38,14 @@ def main():
         "--output",
         default="mapmycode_output",
         help="Output directory"
+    )
+
+    parser.add_argument(
+        "--exclude",
+        nargs="+",
+        default=[],
+        metavar="FOLDER",
+        help="Additional folder names to exclude from analysis (e.g. --exclude test examples)"
     )
 
     args = parser.parse_args()
@@ -55,8 +64,8 @@ def main():
     print(f"\n Analyzing codebase at: {path}")
     print("-" * 60)
 
-    try : 
-        analyze_codebase(path,output_path)
+    try :
+        analyze_codebase(path,output_path,args.exclude)
         print("\n" + "-" * 60)
         print("Analysis complete! Documentation and dependency graph generated.")
         print(f"\n Results saved to: {output_path}")

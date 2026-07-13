@@ -1,10 +1,14 @@
 from mapmycode.groq_call import run_groq_api
-from mapmycode.prompts import get_file_summary
+from mapmycode.prompts import get_file_summary, get_chunk_summary_prompt
 from langchain_core.output_parsers import JsonOutputParser
 import os
 from mapmycode.pydantic_classes import FileSummary
 import json
 import time
+import tiktoken
+
+MAX_FILE_CONTENT_TOKENS = 6000
+CHUNK_TOKENS = 4000
 
 def topological_sort(graph):
     visited = set()
@@ -50,12 +54,41 @@ def create_graph(python_files):
     
     return graph, file_contents
 
+def summarize_large_file_content(file_name, file_content):
+    encoding = tiktoken.get_encoding("o200k_base")
+
+    if len(encoding.encode(file_content)) <= MAX_FILE_CONTENT_TOKENS:
+        return file_content
+
+    running_summary = ""
+    chunk_lines = []
+    chunk_tokens = 0
+
+    for line in file_content.splitlines(keepends=True):
+        line_tokens = len(encoding.encode(line))
+
+        if chunk_lines and chunk_tokens + line_tokens > CHUNK_TOKENS:
+            chunk_prompt = get_chunk_summary_prompt(file_name, "".join(chunk_lines), running_summary)
+            running_summary = run_groq_api(chunk_prompt)
+            time.sleep(2)
+            chunk_lines = []
+            chunk_tokens = 0
+
+        chunk_lines.append(line)
+        chunk_tokens += line_tokens
+
+    if chunk_lines:
+        chunk_prompt = get_chunk_summary_prompt(file_name, "".join(chunk_lines), running_summary)
+        running_summary = run_groq_api(chunk_prompt)
+
+    return running_summary
+
 def create_dependency_dict(graph,order,file_contents):
     results = {}
     parser = JsonOutputParser(pydantic_object=FileSummary)
     for file in order:
-        file_content = file_contents[file]
-        
+        file_content = summarize_large_file_content(file, file_contents[file])
+
         dependencies = graph[file]
         dependencies_dict = {}
         

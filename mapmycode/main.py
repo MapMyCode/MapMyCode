@@ -8,8 +8,8 @@ load_dotenv(override=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def main(path,output_dir):
-    python_files = walk_directories(path)
+def main(path,output_dir,exclude_dirs=None):
+    python_files = walk_directories(path, exclude_dirs)
     
     print(f"Python files identified :  {python_files}")
     print('-'*60)

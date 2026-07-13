@@ -63,7 +63,34 @@ def get_file_summary(file_name, file_content, dependencies_dict):
     }}
     """
     return summary_prompt
-  
+
+def get_chunk_summary_prompt(file_name, chunk_content, running_summary):
+    prompt = f"""
+    You are condensing a single large Python source file into a compact but faithful outline, because the raw file is too large to send to an LLM in one piece.
+
+    The file has been split into sequential chunks. You will process one chunk at a time and keep updating a running condensed outline of the file.
+
+    file name: {file_name}
+
+    Condensed outline of the file so far (empty if this is the first chunk):
+    {running_summary}
+
+    New raw source code chunk to fold into the outline:
+    {chunk_content}
+
+    Instructions:
+    1. Merge information from the new chunk into the existing condensed outline, keeping everything already captured.
+    2. Preserve every import statement, and every top-level function/class signature, exactly as written.
+    3. Replace function/class bodies with a single short sentence describing what they do.
+    4. Preserve the original order in which things are defined in the file.
+    5. Do not invent code or behavior that isn't present in the chunk.
+    6. The outline must never exceed 1500 words in total. If it would, compress older entries first: shorten earlier one-line descriptions and drop the least important helper functions, but never drop imports, classes, or entry-point/public functions.
+    7. Output plain text that reads like a compact, faithful outline of the file's source code so far. Do not output JSON.
+
+    Return the COMPLETE updated condensed outline of the file (not just the delta), staying within the 1500 word limit.
+    """
+    return prompt
+
 def get_documentation_prompt(files_metadata):
     prompt = f"""
     You are an expert software architect, code analyst, and technical documentation writer.

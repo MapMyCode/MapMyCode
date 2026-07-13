@@ -8,10 +8,11 @@ from mapmycode.prompts import get_mermaid_flowchart_prompt, get_documentation_pr
 import tiktoken
 import time
 
-exclude_dirs = ['.venv','__pycache__','venv','mapmycode','.test-env','dist']
+DEFAULT_EXCLUDE_DIRS = ['.venv','__pycache__','venv','mapmycode','.test-env','dist']
 
-def walk_directories(path):
+def walk_directories(path, extra_exclude_dirs=None):
     python_files = []
+    exclude_dirs = set(DEFAULT_EXCLUDE_DIRS) | set(extra_exclude_dirs or [])
 
     for root, dirs, files in os.walk(path):
         dirs[:] = [d for d in dirs if d not in exclude_dirs]

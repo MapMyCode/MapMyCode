@@ -7,7 +7,7 @@ load_dotenv()
 def run_groq_api(prompt, model="openai/gpt-oss-120b"):
 
     client = Groq(
-        api_key=os.environ.get("GROQ_API"),
+        api_key=os.environ.get("GROQ_API_KEY"),
     )
 
     chat_completion = client.chat.completions.create(
